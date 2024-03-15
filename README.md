@@ -1,17 +1,17 @@
-# digitized_av_validation
+# digitized_image_validation
 Validator for incoming digitized audiovisual assets.
 
-[![Build Status](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_av_validation.svg?branch=base)](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_av_validation)
+[![Build Status](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_image_validation.svg?branch=base)](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_image_validation)
 
 ## Getting Started
 
 If you have [git](https://git-scm.com/) and [Docker](https://www.docker.com/community-edition) installed, using this repository is as simple as:
 
 ```
-git clone https://github.com/RockefellerArchiveCenter/digitized_av_validation.git
-cd digitized_av_validation
-docker build -t digitized_av_validation .
-docker run digitized_av_validation
+git clone https://github.com/RockefellerArchiveCenter/digitized_image_validation.git
+cd digitized_image_validation
+docker build -t digitized_image_validation .
+docker run digitized_image_validation
 ```
 
 ## Usage
