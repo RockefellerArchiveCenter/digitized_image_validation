@@ -1,5 +1,5 @@
 # digitized_image_validation
-Validator for incoming digitized audiovisual assets.
+Validator for incoming digitized still image and textual assets.
 
 [![Build Status](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_image_validation.svg?branch=base)](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_image_validation)
 
