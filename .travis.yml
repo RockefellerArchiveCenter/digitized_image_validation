@@ -6,7 +6,7 @@ cache: pip
 env:
   global:
     - TIMESTAMP: $(date '+%Y%m%d%H%M%S')
-    - APP_NAME: digitized_av_validation
+    - APP_NAME: digitized_image_validation
 
 before_script:
   - pip install tox

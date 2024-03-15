@@ -15,7 +15,7 @@ from src.validate import (AlreadyExistsError, AssetValidationError,
 
 DEFAULT_ARGS = [
     'us-east-1',
-    'digitized-av-role-arn',
+    'digitized-image-role-arn',
     'audio',
     'foo',
     '/qc',
@@ -61,7 +61,7 @@ def test_init():
 
     invalid_args = [
         'us-east-1',
-        'digitized-av-role-arn',
+        'digitized-image-role-arn',
         'text',
         'foo',
         '/qc',
