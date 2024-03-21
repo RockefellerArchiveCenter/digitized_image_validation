@@ -9,27 +9,17 @@ import boto3
 import pytest
 from moto import mock_s3, mock_sns, mock_sqs, mock_sts
 from moto.core import DEFAULT_ACCOUNT_ID
+from PIL import UnidentifiedImageError
 
 from src.validate import (AlreadyExistsError, AssetValidationError,
                           FileFormatValidationError, RefidError, Validator)
 
-DEFAULT_ARGS = [
+ARGS = [
     'us-east-1',
     'digitized-image-role-arn',
-    'audio',
     'foo',
     '/qc',
     'b90862f3baceaae3b7418c78f9d50d52.tar.gz',
-    '/validation',
-    'topic']
-
-VIDEO_ARGS = [
-    'us-east-1',
-    'role-arn',
-    'video',
-    'foo',
-    '/qc',
-    '20f8da26e268418ead4aa2365f816a08.tar.gz',
     '/validation',
     'topic']
 
@@ -37,7 +27,7 @@ VIDEO_ARGS = [
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     """Fixture to create and tear down dir before and after a test is run"""
-    dir_list = [DEFAULT_ARGS[4], DEFAULT_ARGS[6]]
+    dir_list = [ARGS[3], ARGS[5]]
     for dir in dir_list:
         dir_path = Path(dir)
         if not dir_path.is_dir():
@@ -51,8 +41,7 @@ def setup_and_teardown():
 
 def test_init():
     """Asserts Validator init method sets attributes correctly."""
-    validator = Validator(*DEFAULT_ARGS)
-    assert validator.format == 'audio'
+    validator = Validator(*ARGS)
     assert validator.source_bucket == 'foo'
     assert validator.destination_dir == '/qc'
     assert validator.source_filename == 'b90862f3baceaae3b7418c78f9d50d52.tar.gz'
@@ -84,7 +73,7 @@ def test_init():
 def test_run(mock_deliver, mock_cleanup, mock_move, mock_validate_formats,
              mock_validate_assets, mock_validate_bag, mock_extract_bag, mock_download, mock_refid):
     """Asserts correct methods are called by run method."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     extracted_path = Path(validator.tmp_dir, validator.refid)
     download_path = "foo"
     mock_download.return_value = download_path
@@ -105,7 +94,7 @@ def test_run(mock_deliver, mock_cleanup, mock_move, mock_validate_formats,
 @patch('src.validate.Validator.deliver_failure_notification')
 def test_run_with_exception(mock_deliver, mock_cleanup, mock_refid):
     """Asserts run method handles exceptions correctly."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     exception = Exception("Invalid refid.")
     mock_refid.side_effect = exception
     validator.run()
@@ -115,7 +104,7 @@ def test_run_with_exception(mock_deliver, mock_cleanup, mock_refid):
 
 def test_validate_refid():
     """Asserts refID is validated."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     assert validator.validate_refid(validator.refid)
     with pytest.raises(RefidError):
         validator.validate_refid('b90862f3baceaae3b7418c78f9d50d5')
@@ -125,7 +114,7 @@ def test_validate_refid():
 @mock_sts
 def test_download_bag():
     """Asserts file is downloaded correctly."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     bucket_name = validator.source_bucket
     expected_path = Path(validator.tmp_dir, validator.source_filename)
     s3 = boto3.client('s3', region_name='us-east-1')
@@ -139,7 +128,7 @@ def test_download_bag():
 
 def test_extract_bag():
     """Asserts bag is extracted correctly and downloaded file is removed."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     fixture_path = Path(
         "tests",
         "fixtures",
@@ -154,7 +143,7 @@ def test_extract_bag():
 
 def test_validate_bag():
     """Asserts bag validation is successful or raises expected exceptions on failure."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     fixture_path = Path(
         "tests",
         "fixtures",
@@ -171,108 +160,75 @@ def test_validate_bag():
 
 def test_validate_assets():
     """Asserts assets are validated as expected."""
-    for args in [DEFAULT_ARGS, VIDEO_ARGS]:
-        validator = Validator(*args)
-        fixture_path = Path("tests", "fixtures", validator.refid)
-        tmp_path = Path(validator.tmp_dir, validator.refid)
-        copytree(fixture_path, tmp_path)
-
-        validator.validate_assets(tmp_path)
-
-
-def test_get_expected_structure():
-    validator = Validator(*DEFAULT_ARGS)
-    master_file_map = [
-        (['foo'],
-         ['b90862f3baceaae3b7418c78f9d50d52.mp3',
-         'b90862f3baceaae3b7418c78f9d50d52.wav']),
-        (['foo', 'bar'],
-         ['b90862f3baceaae3b7418c78f9d50d52.mp3',
-          'b90862f3baceaae3b7418c78f9d50d52_01.wav',
-          'b90862f3baceaae3b7418c78f9d50d52_02.wav'])]
-    for master_files, expected in master_file_map:
-        output = validator.get_expected_structure(master_files)
-        assert output == expected
-
-    validator = Validator(*VIDEO_ARGS)
-    expected = [
-        '20f8da26e268418ead4aa2365f816a08.mkv',
-        '20f8da26e268418ead4aa2365f816a08.mov',
-        '20f8da26e268418ead4aa2365f816a08.mp4']
-    for master_files in (['foo'], ['foo', 'bar']):
-        output = validator.get_expected_structure(master_files)
-        assert output == expected
-
-
-def test_get_actual_structure():
-    outputs = {
-        'b90862f3baceaae3b7418c78f9d50d52':
-            ['b90862f3baceaae3b7418c78f9d50d52.mp3',
-             'b90862f3baceaae3b7418c78f9d50d52.wav'],
-        '20f8da26e268418ead4aa2365f816a08':
-            ['20f8da26e268418ead4aa2365f816a08.mov',
-             '20f8da26e268418ead4aa2365f816a08.mkv',
-             '20f8da26e268418ead4aa2365f816a08.mp4']}
-    for args in [DEFAULT_ARGS, VIDEO_ARGS]:
-        validator = Validator(*args)
-        fixture_path = Path("tests", "fixtures", validator.refid)
-        tmp_path = Path(validator.tmp_dir, validator.refid)
-        copytree(fixture_path, tmp_path)
-
-        output = validator.get_actual_structure(tmp_path)
-        assert isinstance(output, list)
-        assert set(output) == set(outputs[validator.refid])
-
-
-def test_validate_assets_missing_file():
-    """Asserts exceptions encountered when validating assets are correctly handled."""
-    for args in [DEFAULT_ARGS, VIDEO_ARGS]:
-        validator = Validator(*args)
-        fixture_path = Path("tests", "fixtures", validator.refid)
-        tmp_path = Path(validator.tmp_dir, validator.refid)
-        copytree(fixture_path, tmp_path)
-
-        files = list(tmp_path.glob('data/*'))
-        random.choice(files).unlink()
-
-        with pytest.raises(AssetValidationError):
-            validator.validate_assets(tmp_path)
-
-
-def test_get_policy():
-    """Asserts correct policies are fetched."""
-    validator = Validator(*DEFAULT_ARGS)
-    for fp, expected_path in [
-            ('bar.mp3', 'mediaconch/policies/RAC_Audio_A_MP3.xml'),
-            ('/foo/bar.mp3', 'mediaconch/policies/RAC_Audio_A_MP3.xml'),
-            ('/foo/buzz_baz/bar.mp3', 'mediaconch/policies/RAC_Audio_A_MP3.xml')]:
-        assert validator.get_policy_path(Path(fp)) == expected_path
-
-    with pytest.raises(FileFormatValidationError):
-        validator.get_policy_path(Path("foo.txt"))
-
-
-@patch('src.validate.subprocess.Popen.communicate')
-def test_validate_file_formats(mock_subprocess):
-    """Asserts file formats are validated as expected."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     fixture_path = Path("tests", "fixtures", validator.refid)
     tmp_path = Path(validator.tmp_dir, validator.refid)
     copytree(fixture_path, tmp_path)
 
-    mock_subprocess.return_value = (b'pass! Everything is cool!', b'')
+    validator.validate_assets(tmp_path)
+
+
+def test_validate_directories_missing_dir():
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    rmtree(tmp_path / 'data' / 'service_edited')
+
+    with pytest.raises(AssetValidationError) as err:
+        validator.validate_assets(tmp_path)
+    assert err.typename == 'AssetValidationError'
+    assert 'service_edited' in str(err.value)
+
+
+def test_validate_file_count_missing_file():
+    """Asserts exceptions encountered when validating assets are correctly handled."""
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    files = list(tmp_path.glob('data/master/*'))
+    random.choice(files).unlink()
+
+    with pytest.raises(AssetValidationError):
+        validator.validate_assets(tmp_path)
+
+
+def test_validate_file_formats():
+    """Asserts file formats are validated as expected."""
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
     validator.validate_file_formats(tmp_path)
 
-    error_string = "fail! This is an error!"
-    mock_subprocess.return_value = (b'fail! This is an error!', b'')
-    with pytest.raises(FileFormatValidationError):
-        error = validator.validate_file_formats(tmp_path)
-        assert error_string in error
+
+@patch('src.validate.Validator.validate_file_characteristics')
+def test_validate_file_formats_with_error(mock_characteristics):
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    error_string = 'This is an error!'
+    mock_characteristics.side_effect = AssertionError(error_string)
+    with pytest.raises(FileFormatValidationError) as err:
+        validator.validate_file_formats(tmp_path)
+    assert error_string in (str(err.value))
+
+    error_string = 'This is a different error!'
+    mock_characteristics.side_effect = UnidentifiedImageError(error_string)
+    with pytest.raises(FileFormatValidationError) as err:
+        validator.validate_file_formats(tmp_path)
+    assert error_string in (str(err.value))
 
 
 def test_move_to_destination():
     """Asserts correct files are moved to correct location."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     fixture_path = Path(
         "tests",
         "fixtures",
@@ -282,55 +238,38 @@ def test_move_to_destination():
 
     validator.move_to_destination(tmp_path)
     expected_paths = [
-        f"{validator.destination_dir}/{validator.refid}/{validator.refid}.mp3",
-        f"{validator.destination_dir}/{validator.refid}/{validator.refid}.wav"]
+        f"{validator.destination_dir}/{validator.refid}/master",
+        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0001.tiff",
+        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0002.tiff",
+        f"{validator.destination_dir}/{validator.refid}/master_edited",
+        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0001.tiff",
+        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0002.tiff",
+        f"{validator.destination_dir}/{validator.refid}/service_edited",
+        f"{validator.destination_dir}/{validator.refid}/service_edited/{validator.refid}.pdf",
+    ]
     found = list(
         str(p) for p in Path(
             validator.destination_dir,
-            validator.refid).glob('*'))
+            validator.refid).rglob('*'))
     assert len(expected_paths) == len(found)
     assert sorted(expected_paths) == sorted(found)
 
 
-def test_move_to_destination_multiple_masters():
-    """Asserts correct file are moved to correct location when multiple masters are present."""
-    validator = Validator(*DEFAULT_ARGS)
-    validator.refid = 'b90862f3baceaae3b7418c78f9d50d53'
-    fixture_path = Path(
-        "tests",
-        "fixtures",
-        "b90862f3baceaae3b7418c78f9d50d53")
-    tmp_path = Path(validator.tmp_dir, validator.refid)
-    copytree(fixture_path, tmp_path)
-
-    validator.move_to_destination(tmp_path)
-    expected_paths = [
-        f"{validator.destination_dir}/{validator.refid}/{validator.refid}.mp3",
-        f"{validator.destination_dir}/{validator.refid}/{validator.refid}_01.wav",
-        f"{validator.destination_dir}/{validator.refid}/{validator.refid}_02.wav"]
-    found = list(
-        str(p) for p in Path(
-            validator.destination_dir,
-            validator.refid).glob('*'))
-    assert len(expected_paths) == len(found)
-    assert sorted(expected_paths) == sorted(found)
-
-
-@patch('src.validate.copytree')
+@ patch('src.validate.copytree')
 def test_move_to_destination_with_exception(mock_copytree):
     """Asserts correct exception is raised by validator."""
     mock_copytree.side_effect = FileExistsError()
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     tmp_path = Path(validator.tmp_dir, validator.refid)
     with pytest.raises(AlreadyExistsError):
         validator.move_to_destination(tmp_path)
 
 
-@mock_s3
-@mock_sts
+@ mock_s3
+@ mock_sts
 def test_cleanup_binaries():
     """Asserts that binaries are cleaned up properly."""
-    validator = Validator(*DEFAULT_ARGS)
+    validator = Validator(*ARGS)
     fixture_path = Path(
         "tests",
         "fixtures",
@@ -366,10 +305,10 @@ def test_cleanup_binaries():
     assert found == 1
 
 
-@mock_sns
-@mock_sqs
-@mock_sts
-@patch('src.validate.Validator.get_client_with_role')
+@ mock_sns
+@ mock_sqs
+@ mock_sts
+@ patch('src.validate.Validator.get_client_with_role')
 def test_deliver_success_notification(mock_role):
     """Asserts success messages are delivered as expected."""
     sns = boto3.client('sns', region_name='us-east-1')
@@ -383,7 +322,7 @@ def test_deliver_success_notification(mock_role):
         Endpoint=f"arn:aws:sqs:us-east-1:{DEFAULT_ACCOUNT_ID}:test-queue",
     )
 
-    default_args = DEFAULT_ARGS
+    default_args = ARGS
     default_args[-1] = topic_arn
     validator = Validator(*default_args)
 
@@ -392,15 +331,14 @@ def test_deliver_success_notification(mock_role):
     queue = sqs_conn.get_queue_by_name(QueueName="test-queue")
     messages = queue.receive_messages(MaxNumberOfMessages=1)
     message_body = json.loads(messages[0].body)
-    assert message_body['MessageAttributes']['format']['Value'] == validator.format
     assert message_body['MessageAttributes']['outcome']['Value'] == 'SUCCESS'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
 
 
-@mock_sns
-@mock_sqs
-@mock_sts
-@patch('src.validate.Validator.get_client_with_role')
+@ mock_sns
+@ mock_sqs
+@ mock_sts
+@ patch('src.validate.Validator.get_client_with_role')
 def test_deliver_failure_notification(mock_role):
     """Asserts failure messages are delivered as expected."""
     sns = boto3.client('sns', region_name='us-east-1')
@@ -414,7 +352,7 @@ def test_deliver_failure_notification(mock_role):
         Endpoint=f"arn:aws:sqs:us-east-1:{DEFAULT_ACCOUNT_ID}:test-queue",
     )
 
-    default_args = DEFAULT_ARGS
+    default_args = ARGS
     default_args[-1] = topic_arn
     validator = Validator(*default_args)
     exception_message = "foo"
@@ -425,7 +363,6 @@ def test_deliver_failure_notification(mock_role):
     queue = sqs_conn.get_queue_by_name(QueueName="test-queue")
     messages = queue.receive_messages(MaxNumberOfMessages=1)
     message_body = json.loads(messages[0].body)
-    assert message_body['MessageAttributes']['format']['Value'] == validator.format
     assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
     assert exception_message in message_body['MessageAttributes']['message']['Value']

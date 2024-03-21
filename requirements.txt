@@ -20,6 +20,10 @@ jmespath==1.0.1
     # via
     #   boto3
     #   botocore
+pillow==10.2.0
+    # via -r requirements.in
+pypdf==4.1.0
+    # via -r requirements.in
 python-dateutil==2.8.2
     # via botocore
 s3transfer==0.7.0

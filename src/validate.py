@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import subprocess
 import tarfile
 import traceback
 from pathlib import Path
@@ -10,6 +9,8 @@ from shutil import copytree, rmtree
 import bagit
 import boto3
 from aws_assume_role_lib import assume_role
+from PIL import Image, UnidentifiedImageError
+from pypdf import PdfReader
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
@@ -40,11 +41,10 @@ class AlreadyExistsError(Exception):
 class Validator(object):
     """Validates digitized audio and moving image assets."""
 
-    def __init__(self, region, role_arn, format, source_bucket,
+    def __init__(self, region, role_arn, source_bucket,
                  destination_dir, source_filename, tmp_dir, sns_topic):
         self.role_arn = role_arn
         self.region = region
-        self.format = format
         self.source_bucket = source_bucket
         self.destination_dir = destination_dir
         self.source_filename = source_filename
@@ -52,8 +52,6 @@ class Validator(object):
         self.tmp_dir = tmp_dir
         self.sns_topic = sns_topic
         self.service_name = 'digitized_image_validation'
-        if self.format not in ['audio', 'video']:
-            raise Exception(f"Cannot process file with format {self.format}.")
         if not Path(self.tmp_dir).is_dir():
             Path(self.tmp_dir).mkdir(parents=True)
         logging.debug(self.__dict__)
@@ -61,7 +59,7 @@ class Validator(object):
     def run(self):
         """Main method which calls all other logic."""
         logging.debug(
-            f'Validation process started for {self.format} package {self.refid}.')
+            f'Validation process started for package {self.refid}.')
         try:
             extracted = Path(self.tmp_dir, self.refid)
             self.validate_refid(self.refid)
@@ -74,7 +72,7 @@ class Validator(object):
             self.cleanup_binaries(extracted)
             self.deliver_success_notification()
             logging.info(
-                f'{self.format} package {self.refid} successfully validated.')
+                f'Package {self.refid} successfully validated.')
         except Exception as e:
             logging.exception(e)
             self.cleanup_binaries(extracted, job_failed=True)
@@ -141,57 +139,32 @@ class Validator(object):
         bag.validate()
         logging.debug(f'Bag {bag_path} validated.')
 
-    def get_expected_structure(self, master_files):
-        """Return the files expected to be present in a bag's payload directory.
-
-        Returns:
-            expected_structure (list of strings): filenames expected to be present.
-        """
-        if self.format == 'audio':
-            if len(master_files) > 1:
-                expected_structure = [f"{self.refid}.mp3"]
-                for i in range(1, len(master_files) + 1):
-                    expected_structure.append(
-                        f"{self.refid}_{str(i).zfill(2)}.wav")
-            else:
-                expected_structure = [
-                    f"{self.refid}.mp3",
-                    f"{self.refid}.wav"]
-        elif self.format == 'video':
-            expected_structure = [
-                f"{self.refid}.mkv",
-                f"{self.refid}.mov",
-                f"{self.refid}.mp4"]
-        return expected_structure
-
-    def get_actual_structure(self, bag_path):
-        """Return the files present in a bag's payload directory
+    def validate_directories(self, bag_path):
+        """Checks for the presence of expected directories.
 
         Args:
-            bag_path (pathlib.Path): base directory of the bag
+            bag_path (pathlib.Path): path of bagit Bag containing assets.
 
-        Returns:
-            actual_structure (list of strings): filenames found in bag dir
+        Raises:
+            FileNotFoundError if not all directories are present.
         """
-        return [p.name for p in (bag_path / 'data').iterdir()]
+        for dir in ['master', 'master_edited', 'service_edited']:
+            if not (bag_path / 'data' / dir).is_dir():
+                raise FileNotFoundError(f"Expected directory {dir} is missing")
 
-    def get_master_files(self, bag_path):
-        """Returns filepaths of master files in a bag.
-
-        Args:
-            bag_path (pathlib.Path): base directory of the bag
-
-        Returns:
-            master_files (list of pathlib.Path objects): filepaths of master files.
-        """
-        if self.format == 'audio':
-            master_files = (bag_path / 'data').glob('*.wav')
-        elif self.format == 'video':
-            master_files = (bag_path / 'data').glob('*.mkv')
-        return list(master_files)
+    def validate_file_counts(self, bag_path):
+        """Asserts correct number of files is present in each directory."""
+        reader = PdfReader(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
+        pdf_page_count = len(reader.pages)
+        for dir in ['master', 'master_edited']:
+            dir_file_count = len(
+                list((bag_path / 'data' / dir).glob(f'{self.refid}*.tiff')))
+            if dir_file_count != pdf_page_count:
+                raise Exception(
+                    f"Pdf has {pdf_page_count} pages but found {dir_file_count} files in {dir} directory")
 
     def validate_assets(self, bag_path):
-        """Ensures that all expected files are present.
+        """Ensures that all expected directories and files are present.
 
         Args:
             bag_path (pathlib.Path): path of bagit Bag containing assets.
@@ -199,68 +172,37 @@ class Validator(object):
         Raises:
             AssetValidationError if files delivered do not match expected files.
         """
-        master_files = self.get_master_files(bag_path)
-        expected_files = self.get_expected_structure(master_files)
-        actual_files = self.get_actual_structure(bag_path)
-        if set(expected_files) != set(actual_files):
-            expected_files_display = '\n'.join(sorted(expected_files))
-            actual_files_display = '\n'.join(sorted(actual_files))
+        try:
+            self.validate_directories(bag_path)
+            self.validate_file_counts(bag_path)
+        except Exception as e:
             raise AssetValidationError(
-                f'The files delivered do not match what is expected.\n\nExpected files:\n<pre>{expected_files_display}</pre>\n\nActual files:\n<pre>{actual_files_display}</pre>')
+                f"Package structure is invalid: {e}") from e
         logging.debug(f'Package {bag_path} contains all expected assets.')
 
-    def get_policy_path(self, filepath):
-        """Gets path to Mediaconch policy based on filepath extension.
-
-        Args:
-            filepath (Pathlib.path): filepath to parse
-
-        Returns:
-            policy_path (string): filepath of Mediaconch policy.
-        """
-        try:
-            policy_map = {
-                '.mp3': 'RAC_Audio_A_MP3.xml',
-                '.wav': 'RAC_Audio_MA_WAV.xml',
-                '.mp4': 'RAC_Video_A_MP4.xml',
-                '.mkv': 'RAC_Video_MA_FFV1MKV.xml',
-                '.mov': 'RAC_Video_MEZZ_ProRes.xml', }
-            policy = policy_map[filepath.suffix]
-            return str(Path('mediaconch', 'policies', policy))
-        except KeyError:
-            raise FileFormatValidationError(
-                f'No Mediaconch policy found for file {filepath}.')
+    def validate_file_characteristics(self, image_path):
+        image = Image.open(image_path)
+        assert image.mode == "RGB", f"Image format should be RGB, got {image.mode}."
+        resolution = image.info.get('dpi', image.info.get('resolution'))
+        assert resolution, "Image does not have embedded resolution information."
+        assert resolution[0] >= 400 and resolution[1] >= 400, f"Image resolution should be at least 400dpi, got {image.info['dpi']}"
 
     def validate_file_formats(self, bag_path):
-        """Ensures that files pass MediaConch validation rules.
+        """Ensures that files pass format validation rules.
 
         Args:
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
-        for f in bag_path.glob('data/*'):
-            policy_path = self.get_policy_path(f)
-            process = subprocess.Popen(['mediaconch',
-                                        '-p',
-                                        policy_path,
-                                        '-fs',
-                                        f],
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
-            out, _ = process.communicate()
-            if out.decode().startswith('fail!'):
-                display_path = str(Path('mediaconch', 'display.xsl'))
-                report_process = subprocess.Popen(['mediaconch',
-                                                   '-p',
-                                                   policy_path,
-                                                   '-d',
-                                                   display_path,
-                                                   f],
-                                                  stdout=subprocess.PIPE,
-                                                  stderr=subprocess.PIPE)
-                out, _ = report_process.communicate()
-                report = out.decode()
-                raise FileFormatValidationError(
-                    f"{str(f)} is not valid according to format policy\n<pre>{report}</pre>")
+        for dir in ['master', 'master_edited']:
+            for fp in (bag_path / 'data' / dir).glob('*.tiff'):
+                try:
+                    self.validate_file_characteristics(fp)
+                except UnidentifiedImageError as e:
+                    raise FileFormatValidationError(
+                        f"Invalid TIFF file {str(fp)}: {e}")
+                except AssertionError as e:
+                    raise FileFormatValidationError(
+                        f"TIFF file does not meet specs: {e}")
         logging.debug(f'All file formats in {bag_path} are valid.')
 
     def move_to_destination(self, bag_path):
@@ -298,12 +240,8 @@ class Validator(object):
         client = self.get_client_with_role('sns', self.role_arn)
         client.publish(
             TopicArn=self.sns_topic,
-            Message=f'{self.format} package {self.source_filename} successfully validated',
+            Message=f'Package {self.source_filename} successfully validated',
             MessageAttributes={
-                'format': {
-                    'DataType': 'String',
-                    'StringValue': self.format,
-                },
                 'refid': {
                     'DataType': 'String',
                     'StringValue': self.refid,
@@ -329,12 +267,8 @@ class Validator(object):
         tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
             TopicArn=self.sns_topic,
-            Message=f'{self.format} package {self.source_filename} is invalid',
+            Message=f'Package {self.source_filename} is invalid',
             MessageAttributes={
-                'format': {
-                    'DataType': 'String',
-                    'StringValue': self.format,
-                },
                 'refid': {
                     'DataType': 'String',
                     'StringValue': self.refid,
@@ -358,7 +292,6 @@ class Validator(object):
 if __name__ == '__main__':
     region = os.environ.get('AWS_REGION')
     role_arn = os.environ.get('AWS_ROLE_ARN')
-    format = os.environ.get('FORMAT')
     source_bucket = os.environ.get('AWS_SOURCE_BUCKET')
     source_filename = os.environ.get('SOURCE_FILENAME')
     tmp_dir = os.environ.get('TMP_DIR')
@@ -366,11 +299,10 @@ if __name__ == '__main__':
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
 
     logging.debug(
-        f'Validator instantiated with arguments: {region} {role_arn} {format} {source_bucket} {destination_dir} {source_filename} {tmp_dir} {sns_topic}')
+        f'Validator instantiated with arguments: {region} {role_arn} {source_bucket} {destination_dir} {source_filename} {tmp_dir} {sns_topic}')
     Validator(
         region,
         role_arn,
-        format,
         source_bucket,
         destination_dir,
         source_filename,
