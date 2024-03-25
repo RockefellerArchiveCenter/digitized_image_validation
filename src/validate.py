@@ -158,7 +158,7 @@ class Validator(object):
         pdf_page_count = len(reader.pages)
         for dir in ['master', 'master_edited']:
             dir_file_count = len(
-                list((bag_path / 'data' / dir).glob(f'{self.refid}*.tiff')))
+                list((bag_path / 'data' / dir).glob(f'{self.refid}*.tif')))
             if dir_file_count != pdf_page_count:
                 raise Exception(
                     f"Pdf has {pdf_page_count} pages but found {dir_file_count} files in {dir} directory")
@@ -194,7 +194,7 @@ class Validator(object):
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
         for dir in ['master', 'master_edited']:
-            for fp in (bag_path / 'data' / dir).glob('*.tiff'):
+            for fp in (bag_path / 'data' / dir).glob('*.tif'):
                 try:
                     self.validate_file_characteristics(fp)
                 except UnidentifiedImageError as e:
