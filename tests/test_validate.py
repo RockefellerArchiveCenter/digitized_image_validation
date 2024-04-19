@@ -239,11 +239,11 @@ def test_move_to_destination():
     validator.move_to_destination(tmp_path)
     expected_paths = [
         f"{validator.destination_dir}/{validator.refid}/master",
-        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0001.tiff",
-        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0002.tiff",
+        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0001.tif",
+        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0002.tif",
         f"{validator.destination_dir}/{validator.refid}/master_edited",
-        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0001.tiff",
-        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0002.tiff",
+        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0001.tif",
+        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0002.tif",
         f"{validator.destination_dir}/{validator.refid}/service_edited",
         f"{validator.destination_dir}/{validator.refid}/service_edited/{validator.refid}.pdf",
     ]
