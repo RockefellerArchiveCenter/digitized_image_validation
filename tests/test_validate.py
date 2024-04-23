@@ -368,3 +368,4 @@ def test_deliver_failure_notification(mock_traceback, mock_role):
     assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
     assert exception_message in message_body['MessageAttributes']['message']['Value']
+    assert message_body['MessageAttributes']['traceback']['Value'] == 'baz'
