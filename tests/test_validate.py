@@ -338,8 +338,9 @@ def test_deliver_success_notification(mock_role):
 @ mock_sns
 @ mock_sqs
 @ mock_sts
-@ patch('src.validate.Validator.get_client_with_role')
-def test_deliver_failure_notification(mock_role):
+@patch('src.validate.Validator.get_client_with_role')
+@patch('traceback.format_exception')
+def test_deliver_failure_notification(mock_traceback, mock_role):
     """Asserts failure messages are delivered as expected."""
     sns = boto3.client('sns', region_name='us-east-1')
     mock_role.return_value = sns
@@ -357,6 +358,7 @@ def test_deliver_failure_notification(mock_role):
     validator = Validator(*default_args)
     exception_message = "foo"
     exception = Exception(exception_message)
+    mock_traceback.return_value = ["baz", "buzz"]
 
     validator.deliver_failure_notification(exception)
 
@@ -366,3 +368,4 @@ def test_deliver_failure_notification(mock_role):
     assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
     assert exception_message in message_body['MessageAttributes']['message']['Value']
+    assert message_body['MessageAttributes']['traceback']['Value'] == 'baz'
