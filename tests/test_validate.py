@@ -255,7 +255,7 @@ def test_move_to_destination():
     assert sorted(expected_paths) == sorted(found)
 
 
-@ patch('src.validate.copytree')
+@patch('src.validate.copytree')
 def test_move_to_destination_with_exception(mock_copytree):
     """Asserts correct exception is raised by validator."""
     mock_copytree.side_effect = FileExistsError()
@@ -265,8 +265,8 @@ def test_move_to_destination_with_exception(mock_copytree):
         validator.move_to_destination(tmp_path)
 
 
-@ mock_s3
-@ mock_sts
+@mock_s3
+@mock_sts
 def test_cleanup_binaries():
     """Asserts that binaries are cleaned up properly."""
     validator = Validator(*ARGS)
@@ -305,10 +305,10 @@ def test_cleanup_binaries():
     assert found == 1
 
 
-@ mock_sns
-@ mock_sqs
-@ mock_sts
-@ patch('src.validate.Validator.get_client_with_role')
+@mock_sns
+@mock_sqs
+@mock_sts
+@patch('src.validate.Validator.get_client_with_role')
 def test_deliver_success_notification(mock_role):
     """Asserts success messages are delivered as expected."""
     sns = boto3.client('sns', region_name='us-east-1')
@@ -335,9 +335,9 @@ def test_deliver_success_notification(mock_role):
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
 
 
-@ mock_sns
-@ mock_sqs
-@ mock_sts
+@mock_sns
+@mock_sqs
+@mock_sts
 @patch('src.validate.Validator.get_client_with_role')
 @patch('traceback.format_exception')
 def test_deliver_failure_notification(mock_traceback, mock_role):
