@@ -229,8 +229,14 @@ class Validator(object):
         """
         def remove_readonly(func, path, _):
             "Clear the readonly bit and reattempt the removal"
-            Path(path).chmod(stat.S_IWRITE)
-            func(path)
+            if Path(path).is_file():
+                Path(path).chmod(stat.S_IWRITE)
+                Path.unlink()
+            else:
+                for p in Path(path).rglob("*"):
+                    if p.is_file():
+                        p.chmod(stat.S_IWRITE)
+                rmtree(path)
 
         client = self.get_client_with_role('s3', self.role_arn)
         if bag_path.is_dir():
