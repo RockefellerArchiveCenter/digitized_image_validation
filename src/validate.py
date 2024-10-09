@@ -230,12 +230,11 @@ class Validator(object):
         def remove_readonly(func, path, _):
             "Clear the readonly bit and reattempt the removal"
             if Path(path).is_file():
-                Path(path).chmod(stat.S_IWRITE)
+                Path(path).chmod(stat.S_IWOTH)
                 Path.unlink()
             else:
                 for p in Path(path).rglob("*"):
-                    if p.is_file():
-                        p.chmod(stat.S_IWRITE)
+                    p.chmod(stat.S_IWOTH)
                 rmtree(path)
 
         client = self.get_client_with_role('s3', self.role_arn)
