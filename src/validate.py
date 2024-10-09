@@ -233,6 +233,7 @@ class Validator(object):
                 Path(path).chmod(stat.S_IWOTH)
                 Path.unlink()
             else:
+                Path(path).chmod(stat.S_IWOTH)
                 for p in Path(path).rglob("*"):
                     p.chmod(stat.S_IWOTH)
                 rmtree(path)
