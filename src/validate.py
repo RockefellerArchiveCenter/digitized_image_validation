@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import stat
 import tarfile
 import traceback
 from pathlib import Path
@@ -227,20 +226,9 @@ class Validator(object):
         Args:
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
-        def remove_readonly(func, path, _):
-            "Clear the readonly bit and reattempt the removal"
-            if Path(path).is_file():
-                Path(path).chmod(stat.S_IWOTH)
-                Path.unlink()
-            else:
-                Path(path).chmod(stat.S_IWOTH)
-                for p in Path(path).rglob("*"):
-                    p.chmod(stat.S_IWOTH)
-                rmtree(path)
-
         client = self.get_client_with_role('s3', self.role_arn)
         if bag_path.is_dir():
-            rmtree(bag_path, onerror=remove_readonly)
+            rmtree(bag_path)
         if not job_failed:
             client.delete_object(
                 Bucket=self.source_bucket,
