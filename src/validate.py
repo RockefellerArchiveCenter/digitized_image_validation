@@ -10,7 +10,7 @@ import bagit
 import boto3
 from aws_assume_role_lib import assume_role
 from PIL import Image, UnidentifiedImageError
-from pypdf import PdfReader
+from pymupdf import Document
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
@@ -35,6 +35,10 @@ class FileFormatValidationError(Exception):
 
 
 class AlreadyExistsError(Exception):
+    pass
+
+
+class OCRError(Exception):
     pass
 
 
@@ -68,6 +72,7 @@ class Validator(object):
             self.validate_bag(extracted)
             self.validate_assets(extracted)
             self.validate_file_formats(extracted)
+            self.validate_ocr(extracted)
             self.move_to_destination(extracted)
             self.cleanup_binaries(extracted)
             self.deliver_success_notification()
@@ -154,14 +159,21 @@ class Validator(object):
 
     def validate_file_counts(self, bag_path):
         """Asserts correct number of files is present in each directory."""
-        reader = PdfReader(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
-        pdf_page_count = len(reader.pages)
+        document = Document(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
+        pdf_page_count = document.page_count
         for dir in ['master', 'master_edited']:
             dir_file_count = len(
                 list((bag_path / 'data' / dir).glob(f'{self.refid}*.tif')))
             if dir_file_count != pdf_page_count:
                 raise Exception(
                     f"Pdf has {pdf_page_count} pages but found {dir_file_count} files in {dir} directory")
+
+    def validate_ocr(self, bag_path):
+        document = Document(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
+        for page in document:
+            if page.get_text("text"):
+                return True
+        raise OCRError(f'No OCR detected in package {self.refid}')
 
     def validate_assets(self, bag_path):
         """Ensures that all expected directories and files are present.
