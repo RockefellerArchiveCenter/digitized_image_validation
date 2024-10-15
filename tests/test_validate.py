@@ -12,7 +12,8 @@ from moto.core import DEFAULT_ACCOUNT_ID
 from PIL import UnidentifiedImageError
 
 from src.validate import (AlreadyExistsError, AssetValidationError,
-                          FileFormatValidationError, RefidError, Validator)
+                          FileFormatValidationError, OCRError, RefidError,
+                          Validator)
 
 ARGS = [
     'us-east-1',
@@ -67,10 +68,11 @@ def test_init():
 @patch('src.validate.Validator.validate_bag')
 @patch('src.validate.Validator.validate_assets')
 @patch('src.validate.Validator.validate_file_formats')
+@patch('src.validate.Validator.validate_ocr')
 @patch('src.validate.Validator.move_to_destination')
 @patch('src.validate.Validator.cleanup_binaries')
 @patch('src.validate.Validator.deliver_success_notification')
-def test_run(mock_deliver, mock_cleanup, mock_move, mock_validate_formats,
+def test_run(mock_deliver, mock_cleanup, mock_move, mock_ocr, mock_validate_formats,
              mock_validate_assets, mock_validate_bag, mock_extract_bag, mock_download, mock_refid):
     """Asserts correct methods are called by run method."""
     validator = Validator(*ARGS)
@@ -81,6 +83,7 @@ def test_run(mock_deliver, mock_cleanup, mock_move, mock_validate_formats,
     mock_deliver.assert_called_once_with()
     mock_cleanup.assert_called_once_with(extracted_path)
     mock_move.assert_called_once_with(extracted_path)
+    mock_ocr.assert_called_once_with(extracted_path)
     mock_validate_formats.assert_called_once_with(extracted_path)
     mock_validate_assets.assert_called_once_with(extracted_path)
     mock_validate_bag.assert_called_once_with(extracted_path)
@@ -224,6 +227,28 @@ def test_validate_file_formats_with_error(mock_characteristics):
     with pytest.raises(FileFormatValidationError) as err:
         validator.validate_file_formats(tmp_path)
     assert error_string in (str(err.value))
+
+
+def test_validate_ocr():
+    """Asserts PDF is checked for OCR layer."""
+    validator = Validator(*ARGS)
+    fixture_path = Path(
+        "tests",
+        "fixtures",
+        "b90862f3baceaae3b7418c78f9d50d52")
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    validator.validate_ocr(tmp_path)
+
+    # Assert PDFs without OCR raise error.
+    copyfile(
+        Path("tests", "fixtures", "non-text-searchable.pdf"),
+        tmp_path / 'data' / 'service_edited' / f'{validator.refid}.pdf')
+
+    with pytest.raises(OCRError) as err:
+        validator.validate_ocr(tmp_path)
+    assert validator.refid in str(err.value)
 
 
 def test_move_to_destination():
