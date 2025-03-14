@@ -240,7 +240,12 @@ class Validator(object):
         """
         client = self.get_client_with_role('s3', self.role_arn)
         if bag_path.is_dir():
-            rmtree(bag_path)
+            try:
+                rmtree(bag_path)
+            except OSError:
+                for p in bag_path.iterdir():
+                    p.chmod(0o775)
+                rmtree(bag_path)
         if not job_failed:
             client.delete_object(
                 Bucket=self.source_bucket,
