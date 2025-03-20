@@ -185,18 +185,25 @@ def test_validate_directories_missing_dir():
     assert 'service_edited' in str(err.value)
 
 
-def test_validate_file_count_missing_file():
-    """Asserts exceptions encountered when validating assets are correctly handled."""
+def test_validate_file_count_missing_files():
+    """Asserts expected exceptions encountered when validating assets are correctly handled."""
     validator = Validator(*ARGS)
     fixture_path = Path("tests", "fixtures", validator.refid)
     tmp_path = Path(validator.tmp_dir, validator.refid)
-    copytree(fixture_path, tmp_path)
 
-    files = list(tmp_path.glob('data/master/*'))
-    random.choice(files).unlink()
+    for dir, msg in [
+            ('master', 'Package structure is invalid: 2 files found in master_edited directory but only 1 in master directory'),
+            ('master_edited', 'Package structure is invalid: PDF has 2 pages but found 1 files in master_edited directory')]:
+        copytree(fixture_path, tmp_path)
 
-    with pytest.raises(AssetValidationError):
-        validator.validate_assets(tmp_path)
+        files = list(tmp_path.glob(f'data/{dir}/*'))
+        random.choice(files).unlink()
+
+        with pytest.raises(AssetValidationError) as err:
+            validator.validate_assets(tmp_path)
+        assert str(err.value) == msg
+
+        rmtree(tmp_path)
 
 
 def test_validate_file_formats():

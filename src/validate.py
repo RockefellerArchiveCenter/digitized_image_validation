@@ -161,12 +161,15 @@ class Validator(object):
         """Asserts correct number of files is present in each directory."""
         document = Document(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
         pdf_page_count = document.page_count
-        for dir in ['master', 'master_edited']:
-            dir_file_count = len(
-                list((bag_path / 'data' / dir).glob(f'{self.refid}*.tif')))
-            if dir_file_count != pdf_page_count:
-                raise Exception(
-                    f"Pdf has {pdf_page_count} pages but found {dir_file_count} files in {dir} directory")
+        master_file_count = len(list((bag_path / 'data' / 'master').glob(f'{self.refid}*.tif')))
+        master_edited_file_count = len(
+            list((bag_path / 'data' / 'master_edited').glob(f'{self.refid}*.tif')))
+        if pdf_page_count != master_edited_file_count:
+            raise Exception(
+                f"PDF has {pdf_page_count} pages but found {master_edited_file_count} files in master_edited directory")
+        if master_file_count < master_edited_file_count:
+            raise Exception(
+                f"{master_edited_file_count} files found in master_edited directory but only {master_file_count} in master directory")
 
     def validate_ocr(self, bag_path):
         document = Document(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
