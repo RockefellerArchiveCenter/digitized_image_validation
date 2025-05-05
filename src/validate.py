@@ -197,7 +197,7 @@ class Validator(object):
 
     def validate_file_characteristics(self, image_path):
         with Image.open(image_path) as image:
-            assert image.mode == ["L", "RGB"], f"Image format should be RGB or L, got {image.mode}."
+            assert image.mode in ["L", "RGB"], f"Image format should be RGB or L, got {image.mode}."
             resolution = image.info.get('dpi', image.info.get('resolution'))
             assert resolution, "Image does not have embedded resolution information."
             assert resolution[0] >= 400 and resolution[1] >= 400, f"Image resolution should be at least 400dpi, got {image.info['dpi']}"
