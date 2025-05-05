@@ -196,11 +196,11 @@ class Validator(object):
         logging.debug(f'Package {bag_path} contains all expected assets.')
 
     def validate_file_characteristics(self, image_path):
-        image = Image.open(image_path)
-        assert image.mode == "RGB", f"Image format should be RGB, got {image.mode}."
-        resolution = image.info.get('dpi', image.info.get('resolution'))
-        assert resolution, "Image does not have embedded resolution information."
-        assert resolution[0] >= 400 and resolution[1] >= 400, f"Image resolution should be at least 400dpi, got {image.info['dpi']}"
+        with Image.open(image_path) as image:
+            assert image.mode == ["L", "RGB"], f"Image format should be RGB or L, got {image.mode}."
+            resolution = image.info.get('dpi', image.info.get('resolution'))
+            assert resolution, "Image does not have embedded resolution information."
+            assert resolution[0] >= 400 and resolution[1] >= 400, f"Image resolution should be at least 400dpi, got {image.info['dpi']}"
 
     def validate_file_formats(self, bag_path):
         """Ensures that files pass format validation rules.
