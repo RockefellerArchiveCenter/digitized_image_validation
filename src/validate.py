@@ -8,9 +8,9 @@ from shutil import copytree, rmtree
 
 import bagit
 import boto3
+import pymupdf
 from aws_assume_role_lib import assume_role
 from PIL import Image, UnidentifiedImageError
-from pymupdf import Document
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
@@ -159,8 +159,8 @@ class Validator(object):
 
     def validate_file_counts(self, bag_path):
         """Asserts correct number of files is present in each directory."""
-        document = Document(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
-        pdf_page_count = document.page_count
+        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf') as document:
+            pdf_page_count = document.page_count
         master_file_count = len(list((bag_path / 'data' / 'master').glob(f'{self.refid}*.tif')))
         master_edited_file_count = len(
             list((bag_path / 'data' / 'master_edited').glob(f'{self.refid}*.tif')))
@@ -172,10 +172,10 @@ class Validator(object):
                 f"{master_edited_file_count} files found in master_edited directory but only {master_file_count} in master directory")
 
     def validate_ocr(self, bag_path):
-        document = Document(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
-        for page in document:
-            if page.get_text("text"):
-                return True
+        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf') as document:
+            for page in document:
+                if page.get_text("text"):
+                    return True
         raise OCRError(f'No OCR detected in package {self.refid}')
 
     def validate_assets(self, bag_path):
