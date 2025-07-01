@@ -159,7 +159,7 @@ class Validator(object):
 
     def validate_file_counts(self, bag_path):
         """Asserts correct number of files is present in each directory."""
-        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf') as document:
+        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf', filetype='pdf') as document:
             pdf_page_count = document.page_count
         master_file_count = len(list((bag_path / 'data' / 'master').glob(f'{self.refid}*.tif')))
         master_edited_file_count = len(
@@ -171,8 +171,24 @@ class Validator(object):
             raise Exception(
                 f"{master_edited_file_count} files found in master_edited directory but only {master_file_count} in master directory")
 
+    def validate_file_names(self, bag_path):
+        """Ensures file names are valid.
+
+        Args:
+            bag_path (pathlib.Path): path of bagit Bag containing assets.
+        """
+        for dir in ['master', 'master_edited', 'service_edited']:
+            for fp in (bag_path / 'data' / dir).iterdir():
+                if " " in fp.name:
+                    raise Exception(f"File name {str(fp)} contains space.")
+
     def validate_ocr(self, bag_path):
-        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf') as document:
+        """Ensures there is an OCR layer for each page of the PDF.
+
+        Args:
+            bag_path (pathlib.Path): path of bagit Bag containing assets.
+        """
+        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf', filetype='pdf') as document:
             for page in document:
                 if page.get_text("text"):
                     return True
@@ -190,6 +206,7 @@ class Validator(object):
         try:
             self.validate_directories(bag_path)
             self.validate_file_counts(bag_path)
+            self.validate_file_names(bag_path)
         except Exception as e:
             raise AssetValidationError(
                 f"Package structure is invalid: {e}") from e
