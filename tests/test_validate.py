@@ -185,6 +185,23 @@ def test_validate_directories_missing_dir():
     assert 'service_edited' in str(err.value)
 
 
+def test_validate_filenames_with_space():
+    """Asserts filenames with space throw error."""
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    file = random.choice(list((tmp_path / 'data' / 'master').iterdir()))
+    new_name = file.name.replace("_", " _")
+    file.rename(tmp_path / 'data' / 'master' / new_name)
+
+    with pytest.raises(Exception) as err:
+        validator.validate_file_names(tmp_path)
+    assert "contains space" in str(err.value)
+    assert new_name in str(err.value)
+
+
 def test_validate_file_count_missing_files():
     """Asserts expected exceptions encountered when validating assets are correctly handled."""
     validator = Validator(*ARGS)
