@@ -17,6 +17,8 @@ logging.basicConfig(
     format='%(filename)s::%(funcName)s::%(lineno)s %(message)s')
 logging.getLogger("bagit").setLevel(logging.ERROR)
 
+Image.MAX_IMAGE_PIXELS = 500000000  # accounts for oversized items.
+
 
 class RefidError(Exception):
     pass
