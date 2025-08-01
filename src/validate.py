@@ -4,7 +4,7 @@ import re
 import tarfile
 import traceback
 from pathlib import Path
-from shutil import copytree, rmtree
+from shutil import rmtree
 
 import bagit
 import boto3
@@ -47,12 +47,13 @@ class OCRError(Exception):
 class Validator(object):
     """Validates digitized audio and moving image assets."""
 
-    def __init__(self, region, role_arn, source_bucket,
-                 destination_dir, source_filename, tmp_dir, sns_topic):
-        self.role_arn = role_arn
+    def __init__(self, region, s3_role_arn, sns_role_arn, source_bucket,
+                 destination_bucket, source_filename, tmp_dir, sns_topic):
+        self.s3_role_arn = s3_role_arn
+        self.sns_role_arn = sns_role_arn
         self.region = region
         self.source_bucket = source_bucket
-        self.destination_dir = destination_dir
+        self.destination_bucket = destination_bucket
         self.source_filename = source_filename
         self.refid = Path(source_filename).stem.split('.')[0]
         self.tmp_dir = tmp_dir
@@ -104,7 +105,7 @@ class Validator(object):
             downloaded_path (pathlib.Path): path of the downloaded file.
         """
         downloaded_path = Path(self.tmp_dir, self.source_filename)
-        client = self.get_client_with_role('s3', self.role_arn)
+        client = self.get_client_with_role('s3', self.s3_role_arn)
         transfer_config = boto3.s3.transfer.TransferConfig(
             multipart_threshold=1024 * 25,
             max_concurrency=10,
@@ -240,19 +241,28 @@ class Validator(object):
         logging.debug(f'All file formats in {bag_path} are valid.')
 
     def move_to_destination(self, bag_path):
-        """"Moves validated assets to destination directory.
+        """"Moves validated assets to destination bucket.
 
         Args:
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
-        new_path = Path(self.destination_dir, self.refid)
-        try:
-            copytree(Path(bag_path, 'data'), new_path)
-        except FileExistsError:
+        client = self.get_client_with_role('s3', self.s3_role_arn)
+        existing = bool(client.list_objects_v2(Bucket=self.destination_bucket, MaxKeys=1)['KeyCount'])
+        if existing:
             raise AlreadyExistsError(
                 f'A package with refid {self.refid} is already waiting to be QCed.')
+
+        for dirpath, dirnames, files in (bag_path / 'data').walk():
+            for f in files:
+                source = dirpath / f
+                destination = Path(self.refid, source.relative_to(bag_path / 'data'))
+                client.upload_file(
+                    str(source),
+                    self.destination_bucket,
+                    str(destination))
+
         logging.debug(
-            f'All files in payload directory of {bag_path} moved to destination.')
+            f'All files in payload directory of {bag_path} moved to destination bucket {self.destination_bucket}.')
 
     def cleanup_binaries(self, bag_path, job_failed=False):
         """Removes binaries after completion of successful or failed job.
@@ -260,7 +270,7 @@ class Validator(object):
         Args:
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
-        client = self.get_client_with_role('s3', self.role_arn)
+        client = self.get_client_with_role('s3', self.s3_role_arn)
         if bag_path.is_dir():
             try:
                 rmtree(bag_path)
@@ -268,7 +278,27 @@ class Validator(object):
                 for p in bag_path.iterdir():
                     p.chmod(0o775)
                 rmtree(bag_path)
-        if not job_failed:
+        if job_failed:
+            client = self.get_client_with_role('s3', self.s3_role_arn)
+            paginator = client.get_paginator('list_objects_v2')
+            pages = paginator.paginate(Bucket=self.destination_bucket, Prefix=self.refid)
+
+            objects_to_delete = []
+            for page in pages:
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        objects_to_delete.append({'Key': obj['Key']})
+
+            if objects_to_delete:
+                for i in range(0, len(objects_to_delete), 1000):
+                    batch = objects_to_delete[i:i + 1000]
+                    response = client.delete_objects(
+                        Bucket=self.destination_bucket,
+                        Delete={'Objects': batch, 'Quiet': True})
+                    if 'Errors' in response:
+                        errors = "\n".join([e["Key"] for e in response["errors"]])
+                        raise Exception(f'Error deleting objects: {errors}')
+        else:
             client.delete_object(
                 Bucket=self.source_bucket,
                 Key=self.source_filename)
@@ -276,7 +306,7 @@ class Validator(object):
 
     def deliver_success_notification(self):
         """Sends notifications after successful run."""
-        client = self.get_client_with_role('sns', self.role_arn)
+        client = self.get_client_with_role('sns', self.sns_role_arn)
         client.publish(
             TopicArn=self.sns_topic,
             Message=f'Package {self.source_filename} successfully validated',
@@ -302,7 +332,7 @@ class Validator(object):
         Args:
             exception (Exception): the exception that was thrown.
         """
-        client = self.get_client_with_role('sns', self.role_arn)
+        client = self.get_client_with_role('sns', self.sns_role_arn)
         tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
             TopicArn=self.sns_topic,
@@ -334,20 +364,22 @@ class Validator(object):
 
 if __name__ == '__main__':
     region = os.environ.get('AWS_REGION')
-    role_arn = os.environ.get('AWS_ROLE_ARN')
+    s3_role_arn = os.environ.get('AWS_S3_ROLE_ARN')
+    sns_role_arn = os.environ.get('AWS_SNS_ROLE_ARN')
     source_bucket = os.environ.get('AWS_SOURCE_BUCKET')
     source_filename = os.environ.get('SOURCE_FILENAME')
     tmp_dir = os.environ.get('TMP_DIR')
-    destination_dir = os.environ.get('DESTINATION_DIR')
+    destination_bucket = os.environ.get('DESTINATION_BUCKET')
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
 
-    logging.debug(
-        f'Validator instantiated with arguments: {region} {role_arn} {source_bucket} {destination_dir} {source_filename} {tmp_dir} {sns_topic}')
+    logging.debug('Validator instantiated.')
+
     Validator(
         region,
-        role_arn,
+        s3_role_arn,
+        sns_role_arn,
         source_bucket,
-        destination_dir,
+        destination_bucket,
         source_filename,
         tmp_dir,
         sns_topic).run()
