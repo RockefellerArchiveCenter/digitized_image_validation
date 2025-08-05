@@ -252,7 +252,7 @@ class Validator(object):
             raise AlreadyExistsError(
                 f'A package with refid {self.refid} is already waiting to be QCed.')
 
-        for dirpath, dirnames, files in (bag_path / 'data').walk():
+        for dirpath, _, files in (bag_path / 'data').walk():
             for f in files:
                 source = dirpath / f
                 destination = Path(self.refid, source.relative_to(bag_path / 'data'))
