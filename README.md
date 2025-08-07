@@ -36,9 +36,8 @@ This repository is intended to be deployed as an ECS Task in AWS infrastructure.
 
 ### Expected Package Structure
 
-This validator expects to receive valid BagIt bags serialized as a single `.tar.gz` file. The bag name should correspond to the ArchivesSpace refid for the archival object they represent. The payload directory is expected to contain `master`, `master_edited` and `service_edited` directories. The `master` and `master_edited` directories should contain TIFF files, and the `service_edited` directory is expected to contain a single multipage PDF:
+This validator expects to receive valid BagIt bags serialized as a single `.tar.gz` file. The bag name should correspond to the ArchivesSpace refid for the archival object it represents. The payload directory is expected to contain `master`, `master_edited` and `service_edited` directories. The `master` and `master_edited` directories should contain TIFF files, and the `service_edited` directory is expected to contain a single multipage PDF:
 
-#### Audio packages
 ```
 /refid
     tagmanifest-sha512.txt

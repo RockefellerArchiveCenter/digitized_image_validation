@@ -20,7 +20,7 @@ jmespath==1.0.1
     # via
     #   boto3
     #   botocore
-pillow==10.4.0
+pillow==11.3.0
     # via -r requirements.in
 pymupdf==1.26.3
     # via -r requirements.in
