@@ -247,7 +247,7 @@ class Validator(object):
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
         client = self.get_client_with_role('s3', self.s3_role_arn)
-        existing = bool(client.list_objects_v2(Bucket=self.destination_bucket, MaxKeys=1)['KeyCount'])
+        existing = bool(client.list_objects_v2(Bucket=self.destination_bucket, Prefix=self.refid, MaxKeys=1)['KeyCount'])
         if existing:
             raise AlreadyExistsError(
                 f'A package with refid {self.refid} is already waiting to be QCed.')
