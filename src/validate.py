@@ -256,10 +256,17 @@ class Validator(object):
             for f in files:
                 source = dirpath / f
                 destination = Path(self.refid, source.relative_to(bag_path / 'data'))
+                file_mime_type = 'application/octet-stream'
+                suffix = Path(f).suffix
+                if suffix == '.pdf':
+                    file_mime_type = 'application/pdf'
+                elif suffix == '.tif':
+                    file_mime_type = 'image/tiff'
                 client.upload_file(
                     str(source),
                     self.destination_bucket,
-                    str(destination))
+                    str(destination),
+                    ExtraArgs={'ContentType': file_mime_type})
 
         logging.debug(
             f'All files in payload directory of {bag_path} moved to destination bucket {self.destination_bucket}.')
