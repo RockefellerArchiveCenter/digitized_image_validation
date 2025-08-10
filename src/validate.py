@@ -257,9 +257,10 @@ class Validator(object):
                 source = dirpath / f
                 destination = Path(self.refid, source.relative_to(bag_path / 'data'))
                 file_mime_type = 'application/octet-stream'
-                if Path(f).suffix == '.pdf':
+                suffix = Path(f).suffix
+                if suffix == '.pdf':
                     file_mime_type = 'application/pdf'
-                if Path(f).suffix == '.tif':
+                elif suffix == '.tif':
                     file_mime_type = 'image/tiff'
                 client.upload_file(
                     str(source),
