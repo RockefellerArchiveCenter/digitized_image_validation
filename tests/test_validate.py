@@ -7,7 +7,7 @@ from unittest.mock import patch
 import bagit
 import boto3
 import pytest
-from moto import mock_s3, mock_sns, mock_sqs, mock_sts
+from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 from PIL import UnidentifiedImageError
 
@@ -17,9 +17,10 @@ from src.validate import (AlreadyExistsError, AssetValidationError,
 
 ARGS = [
     'us-east-1',
-    'digitized-image-role-arn',
-    'foo',
-    '/qc',
+    'digitized-image-validation-s3-role-arn',
+    'digitized-image-validation-sns-role-arn',
+    'source_bucket',
+    'destination_bucket',
     'b90862f3baceaae3b7418c78f9d50d52.tar.gz',
     '/validation',
     'topic']
@@ -28,33 +29,32 @@ ARGS = [
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     """Fixture to create and tear down dir before and after a test is run"""
-    dir_list = [ARGS[3], ARGS[5]]
-    for dir in dir_list:
-        dir_path = Path(dir)
-        if not dir_path.is_dir():
-            dir_path.mkdir()
+    tmp_dir = ARGS[6]
+    dir_path = Path(tmp_dir)
+    if not dir_path.is_dir():
+        dir_path.mkdir()
 
     yield  # this is where the testing happens
 
-    for dir in dir_list:
-        rmtree(dir)
+    rmtree(tmp_dir)
 
 
 def test_init():
     """Asserts Validator init method sets attributes correctly."""
     validator = Validator(*ARGS)
-    assert validator.source_bucket == 'foo'
-    assert validator.destination_dir == '/qc'
+    assert validator.source_bucket == 'source_bucket'
+    assert validator.destination_bucket == 'destination_bucket'
     assert validator.source_filename == 'b90862f3baceaae3b7418c78f9d50d52.tar.gz'
     assert validator.tmp_dir == '/validation'
     assert validator.refid == 'b90862f3baceaae3b7418c78f9d50d52'
 
     invalid_args = [
         'us-east-1',
-        'digitized-image-role-arn',
+        'digitized-image-validation-s3-role-arn',
+        'digitized-image-validation-sns-role-arn',
         'text',
-        'foo',
-        '/qc',
+        'source_bucket',
+        'destination_bucket',
         'b90862f3baceaae3b7418c78f9d50d52.tar.gz',
         '/validation',
         'topic']
@@ -113,8 +113,7 @@ def test_validate_refid():
         validator.validate_refid('b90862f3baceaae3b7418c78f9d50d5')
 
 
-@mock_s3
-@mock_sts
+@mock_aws
 def test_download_bag():
     """Asserts file is downloaded correctly."""
     validator = Validator(*ARGS)
@@ -275,6 +274,7 @@ def test_validate_ocr():
     assert validator.refid in str(err.value)
 
 
+@mock_aws
 def test_move_to_destination():
     """Asserts correct files are moved to correct location."""
     validator = Validator(*ARGS)
@@ -284,38 +284,41 @@ def test_move_to_destination():
         "b90862f3baceaae3b7418c78f9d50d52")
     tmp_path = Path(validator.tmp_dir, validator.refid)
     copytree(fixture_path, tmp_path)
+    s3 = boto3.client('s3', region_name='us-east-1')
+    s3.create_bucket(Bucket=validator.destination_bucket)
 
     validator.move_to_destination(tmp_path)
     expected_paths = [
-        f"{validator.destination_dir}/{validator.refid}/master",
-        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0001.tif",
-        f"{validator.destination_dir}/{validator.refid}/master/{validator.refid}_0002.tif",
-        f"{validator.destination_dir}/{validator.refid}/master_edited",
-        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0001.tif",
-        f"{validator.destination_dir}/{validator.refid}/master_edited/{validator.refid}_0002.tif",
-        f"{validator.destination_dir}/{validator.refid}/service_edited",
-        f"{validator.destination_dir}/{validator.refid}/service_edited/{validator.refid}.pdf",
+        f"{validator.refid}/master/{validator.refid}_0001.tif",
+        f"{validator.refid}/master/{validator.refid}_0002.tif",
+        f"{validator.refid}/master_edited/{validator.refid}_0001.tif",
+        f"{validator.refid}/master_edited/{validator.refid}_0002.tif",
+        f"{validator.refid}/service_edited/{validator.refid}.pdf",
     ]
-    found = list(
-        str(p) for p in Path(
-            validator.destination_dir,
-            validator.refid).rglob('*'))
+    found = s3.list_objects_v2(
+        Bucket=validator.destination_bucket,
+        Prefix=validator.refid)['Contents']
     assert len(expected_paths) == len(found)
-    assert sorted(expected_paths) == sorted(found)
+    assert sorted(expected_paths) == sorted([i['Key'] for i in found])
 
 
-@patch('src.validate.copytree')
-def test_move_to_destination_with_exception(mock_copytree):
+@mock_aws
+def test_move_to_destination_with_exception():
     """Asserts correct exception is raised by validator."""
-    mock_copytree.side_effect = FileExistsError()
     validator = Validator(*ARGS)
+    s3 = boto3.client('s3', region_name='us-east-1')
+    s3.create_bucket(Bucket=validator.destination_bucket)
+    s3.put_object(
+        Bucket=validator.destination_bucket,
+        Key=f'{validator.refid}/this-is-a-file.txt',
+        Body='')
+
     tmp_path = Path(validator.tmp_dir, validator.refid)
     with pytest.raises(AlreadyExistsError):
         validator.move_to_destination(tmp_path)
 
 
-@mock_s3
-@mock_sts
+@mock_aws
 def test_cleanup_binaries():
     """Asserts that binaries are cleaned up properly."""
     validator = Validator(*ARGS)
@@ -326,12 +329,18 @@ def test_cleanup_binaries():
     tmp_path = Path(validator.tmp_dir, validator.refid)
     s3 = boto3.client('s3', region_name='us-east-1')
     s3.create_bucket(Bucket=validator.source_bucket)
+    s3.create_bucket(Bucket=validator.destination_bucket)
 
     copytree(fixture_path, tmp_path)
     s3.put_object(
         Bucket=validator.source_bucket,
         Key=validator.source_filename,
         Body='')
+    s3.put_object(
+        Bucket=validator.destination_bucket,
+        Key=f'{validator.refid}/this-is-a-file.txt',
+        Body=''
+    )
 
     validator.cleanup_binaries(tmp_path)
     assert not tmp_path.is_dir()
@@ -339,6 +348,10 @@ def test_cleanup_binaries():
         Bucket=validator.source_bucket,
         Prefix=validator.refid)['KeyCount']
     assert found == 0
+    found = s3.list_objects_v2(
+        Bucket=validator.destination_bucket,
+        Prefix=validator.refid)['KeyCount']
+    assert found == 1
 
     copytree(fixture_path, tmp_path)
     s3.put_object(
@@ -352,11 +365,13 @@ def test_cleanup_binaries():
         Bucket=validator.source_bucket,
         Prefix=validator.refid)['KeyCount']
     assert found == 1
+    found = s3.list_objects_v2(
+        Bucket=validator.destination_bucket,
+        Prefix=validator.refid)['KeyCount']
+    assert found == 0
 
 
-@mock_sns
-@mock_sqs
-@mock_sts
+@mock_aws
 @patch('src.validate.Validator.get_client_with_role')
 def test_deliver_success_notification(mock_role):
     """Asserts success messages are delivered as expected."""
@@ -368,8 +383,7 @@ def test_deliver_success_notification(mock_role):
     sns.subscribe(
         TopicArn=topic_arn,
         Protocol="sqs",
-        Endpoint=f"arn:aws:sqs:us-east-1:{DEFAULT_ACCOUNT_ID}:test-queue",
-    )
+        Endpoint=f"arn:aws:sqs:us-east-1:{DEFAULT_ACCOUNT_ID}:test-queue",)
 
     default_args = ARGS
     default_args[-1] = topic_arn
@@ -384,9 +398,7 @@ def test_deliver_success_notification(mock_role):
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
 
 
-@mock_sns
-@mock_sqs
-@mock_sts
+@mock_aws
 @patch('src.validate.Validator.get_client_with_role')
 @patch('traceback.format_exception')
 def test_deliver_failure_notification(mock_traceback, mock_role):
@@ -399,8 +411,7 @@ def test_deliver_failure_notification(mock_traceback, mock_role):
     sns.subscribe(
         TopicArn=topic_arn,
         Protocol="sqs",
-        Endpoint=f"arn:aws:sqs:us-east-1:{DEFAULT_ACCOUNT_ID}:test-queue",
-    )
+        Endpoint=f"arn:aws:sqs:us-east-1:{DEFAULT_ACCOUNT_ID}:test-queue",)
 
     default_args = ARGS
     default_args[-1] = topic_arn
