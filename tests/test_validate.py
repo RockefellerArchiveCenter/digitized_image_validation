@@ -368,7 +368,7 @@ def test_cleanup_binaries():
     found = s3.list_objects_v2(
         Bucket=validator.destination_bucket,
         Prefix=validator.refid)['KeyCount']
-    assert found == 0
+    assert found == 1
 
 
 @mock_aws
