@@ -285,27 +285,7 @@ class Validator(object):
                 for p in bag_path.iterdir():
                     p.chmod(0o775)
                 rmtree(bag_path)
-        if job_failed:
-            client = self.get_client_with_role('s3', self.s3_role_arn)
-            paginator = client.get_paginator('list_objects_v2')
-            pages = paginator.paginate(Bucket=self.destination_bucket, Prefix=self.refid)
-
-            objects_to_delete = []
-            for page in pages:
-                if 'Contents' in page:
-                    for obj in page['Contents']:
-                        objects_to_delete.append({'Key': obj['Key']})
-
-            if objects_to_delete:
-                for i in range(0, len(objects_to_delete), 1000):
-                    batch = objects_to_delete[i:i + 1000]
-                    response = client.delete_objects(
-                        Bucket=self.destination_bucket,
-                        Delete={'Objects': batch, 'Quiet': True})
-                    if 'Errors' in response:
-                        errors = "\n".join([e["Key"] for e in response["errors"]])
-                        raise Exception(f'Error deleting objects: {errors}')
-        else:
+        if not job_failed:
             client.delete_object(
                 Bucket=self.source_bucket,
                 Key=self.source_filename)
