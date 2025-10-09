@@ -10,7 +10,7 @@ import bagit
 import boto3
 import pymupdf
 from aws_assume_role_lib import assume_role
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
@@ -217,6 +217,7 @@ class Validator(object):
 
     def validate_file_characteristics(self, image_path):
         with Image.open(image_path) as image:
+            image.load()  # Ensures TIFF is valid
             assert image.mode in ["L", "RGB"], f"Image format should be RGB or L, got {image.mode}."
             resolution = image.info.get('dpi', image.info.get('resolution'))
             assert resolution, "Image does not have embedded resolution information."
@@ -232,12 +233,12 @@ class Validator(object):
             for fp in (bag_path / 'data' / dir).glob('*.tif'):
                 try:
                     self.validate_file_characteristics(fp)
-                except UnidentifiedImageError as e:
-                    raise FileFormatValidationError(
-                        f"Invalid TIFF file {str(fp)}: {e}")
                 except AssertionError as e:
                     raise FileFormatValidationError(
                         f"TIFF file does not meet specs: {e}")
+                except Exception as e:
+                    raise FileFormatValidationError(
+                        f"Invalid TIFF file {str(fp)}: {e}")
         logging.debug(f'All file formats in {bag_path} are valid.')
 
     def move_to_destination(self, bag_path):
