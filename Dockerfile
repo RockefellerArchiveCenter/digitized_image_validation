@@ -1,4 +1,13 @@
 FROM python:3.12-alpine AS base
+RUN apk update && apk add --no-cache \
+    gcc \
+    musl-dev \
+    openjpeg-dev \
+    jpeg-dev \
+    swig \
+    make \
+    g++ \
+    clang-dev
 WORKDIR /code
 COPY requirements.txt .
 RUN pip install -r requirements.txt
