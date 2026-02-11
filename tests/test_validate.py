@@ -21,7 +21,7 @@ ARGS = [
     'digitized-image-validation-sns-role-arn',
     'source_bucket',
     'destination_bucket',
-    'b90862f3baceaae3b7418c78f9d50d52.tar.gz',
+    'R898/b90862f3baceaae3b7418c78f9d50d52.tar.gz',
     '/validation',
     'topic']
 
@@ -44,7 +44,7 @@ def test_init():
     validator = Validator(*ARGS)
     assert validator.source_bucket == 'source_bucket'
     assert validator.destination_bucket == 'destination_bucket'
-    assert validator.source_filename == 'b90862f3baceaae3b7418c78f9d50d52.tar.gz'
+    assert validator.source_filename == 'R898/b90862f3baceaae3b7418c78f9d50d52.tar.gz'
     assert validator.tmp_dir == '/validation'
     assert validator.refid == 'b90862f3baceaae3b7418c78f9d50d52'
 
@@ -136,6 +136,7 @@ def test_extract_bag():
         "fixtures",
         "b90862f3baceaae3b7418c78f9d50d52.tar.gz")
     tmp_path = Path(validator.tmp_dir, validator.source_filename)
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
     copyfile(fixture_path, tmp_path)
 
     validator.extract_bag(tmp_path)
@@ -363,7 +364,7 @@ def test_cleanup_binaries():
     assert not tmp_path.is_dir()
     found = s3.list_objects_v2(
         Bucket=validator.source_bucket,
-        Prefix=validator.refid)['KeyCount']
+        Prefix=validator.source_filename)['KeyCount']
     assert found == 1
     found = s3.list_objects_v2(
         Bucket=validator.destination_bucket,
