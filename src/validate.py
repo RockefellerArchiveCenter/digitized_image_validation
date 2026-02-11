@@ -303,6 +303,10 @@ class Validator(object):
                     'DataType': 'String',
                     'StringValue': self.package_id
                 },
+                'source_filename': {
+                    'DataType': 'String',
+                    'StringValue': self.source_filename
+                },
                 'service': {
                     'DataType': 'String',
                     'StringValue': self.service_name,
@@ -329,6 +333,14 @@ class Validator(object):
                 'refid': {
                     'DataType': 'String',
                     'StringValue': self.refid,
+                },
+                'package_id': {
+                    'DataType': 'String',
+                    'StringValue': self.package_id
+                },
+                'source_filename': {
+                    'DataType': 'String',
+                    'StringValue': self.source_filename
                 },
                 'service': {
                     'DataType': 'String',

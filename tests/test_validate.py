@@ -380,6 +380,8 @@ def test_deliver_success_notification(mock_role):
     message_body = json.loads(messages[0].body)
     assert message_body['MessageAttributes']['outcome']['Value'] == 'SUCCESS'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
+    assert message_body['MessageAttributes']['package_id']['Value'] == validator.package_id
+    assert message_body['MessageAttributes']['source_filename']['Value'] == validator.source_filename
 
 
 @mock_aws
@@ -411,5 +413,7 @@ def test_deliver_failure_notification(mock_traceback, mock_role):
     message_body = json.loads(messages[0].body)
     assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
+    assert message_body['MessageAttributes']['package_id']['Value'] == validator.package_id
+    assert message_body['MessageAttributes']['source_filename']['Value'] == validator.source_filename
     assert exception_message in message_body['MessageAttributes']['message']['Value']
     assert message_body['MessageAttributes']['traceback']['Value'] == 'baz'
