@@ -11,9 +11,8 @@ from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 from PIL import UnidentifiedImageError
 
-from src.validate import (AlreadyExistsError, AssetValidationError,
-                          FileFormatValidationError, OCRError, RefidError,
-                          Validator)
+from src.validate import (AssetValidationError, FileFormatValidationError,
+                          OCRError, RefidError, Validator)
 
 ARGS = [
     'us-east-1',
@@ -290,33 +289,17 @@ def test_move_to_destination():
 
     validator.move_to_destination(tmp_path)
     expected_paths = [
-        f"{validator.refid}/master/{validator.refid}_0001.tif",
-        f"{validator.refid}/master/{validator.refid}_0002.tif",
-        f"{validator.refid}/master_edited/{validator.refid}_0001.tif",
-        f"{validator.refid}/master_edited/{validator.refid}_0002.tif",
-        f"{validator.refid}/service_edited/{validator.refid}.pdf",
+        f"{validator.package_id}/master/{validator.refid}_0001.tif",
+        f"{validator.package_id}/master/{validator.refid}_0002.tif",
+        f"{validator.package_id}/master_edited/{validator.refid}_0001.tif",
+        f"{validator.package_id}/master_edited/{validator.refid}_0002.tif",
+        f"{validator.package_id}/service_edited/{validator.refid}.pdf",
     ]
     found = s3.list_objects_v2(
         Bucket=validator.destination_bucket,
-        Prefix=validator.refid)['Contents']
+        Prefix=validator.package_id)['Contents']
     assert len(expected_paths) == len(found)
     assert sorted(expected_paths) == sorted([i['Key'] for i in found])
-
-
-@mock_aws
-def test_move_to_destination_with_exception():
-    """Asserts correct exception is raised by validator."""
-    validator = Validator(*ARGS)
-    s3 = boto3.client('s3', region_name='us-east-1')
-    s3.create_bucket(Bucket=validator.destination_bucket)
-    s3.put_object(
-        Bucket=validator.destination_bucket,
-        Key=f'{validator.refid}/this-is-a-file.txt',
-        Body='')
-
-    tmp_path = Path(validator.tmp_dir, validator.refid)
-    with pytest.raises(AlreadyExistsError):
-        validator.move_to_destination(tmp_path)
 
 
 @mock_aws

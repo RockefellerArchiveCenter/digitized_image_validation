@@ -5,6 +5,7 @@ import tarfile
 import traceback
 from pathlib import Path
 from shutil import rmtree
+from uuid import uuid4
 
 import bagit
 import boto3
@@ -56,6 +57,7 @@ class Validator(object):
         self.destination_bucket = destination_bucket
         self.source_filename = source_filename
         self.refid = Path(source_filename).stem.split('.')[0]
+        self.package_id = str(uuid4())
         self.tmp_dir = tmp_dir
         self.sns_topic = sns_topic
         self.service_name = 'digitized_image_validation'
@@ -243,15 +245,14 @@ class Validator(object):
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
         client = self.get_client_with_role('s3', self.s3_role_arn)
-        existing = bool(client.list_objects_v2(Bucket=self.destination_bucket, Prefix=self.refid, MaxKeys=1)['KeyCount'])
+        existing = bool(client.list_objects_v2(Bucket=self.destination_bucket, Prefix=self.package_id, MaxKeys=1)['KeyCount'])
         if existing:
-            raise AlreadyExistsError(
-                f'A package with refid {self.refid} is already waiting to be QCed.')
+            self.package_id = str(uuid4())
 
         for dirpath, _, files in (bag_path / 'data').walk():
             for f in files:
                 source = dirpath / f
-                destination = Path(self.refid, source.relative_to(bag_path / 'data'))
+                destination = Path(self.package_id, source.relative_to(bag_path / 'data'))
                 file_mime_type = 'application/octet-stream'
                 suffix = Path(f).suffix
                 if suffix == '.pdf':
@@ -297,6 +298,10 @@ class Validator(object):
                 'refid': {
                     'DataType': 'String',
                     'StringValue': self.refid,
+                },
+                'package_id': {
+                    'DataType': 'String',
+                    'StringValue': self.package_id
                 },
                 'service': {
                     'DataType': 'String',
