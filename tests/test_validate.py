@@ -11,9 +11,8 @@ from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 from PIL import UnidentifiedImageError
 
-from src.validate import (AlreadyExistsError, AssetValidationError,
-                          FileFormatValidationError, OCRError, RefidError,
-                          Validator)
+from src.validate import (AssetValidationError, FileFormatValidationError,
+                          OCRError, RefidError, Validator)
 
 ARGS = [
     'us-east-1',
@@ -21,7 +20,7 @@ ARGS = [
     'digitized-image-validation-sns-role-arn',
     'source_bucket',
     'destination_bucket',
-    'b90862f3baceaae3b7418c78f9d50d52.tar.gz',
+    'R898/b90862f3baceaae3b7418c78f9d50d52.tar.gz',
     '/validation',
     'topic']
 
@@ -44,7 +43,7 @@ def test_init():
     validator = Validator(*ARGS)
     assert validator.source_bucket == 'source_bucket'
     assert validator.destination_bucket == 'destination_bucket'
-    assert validator.source_filename == 'b90862f3baceaae3b7418c78f9d50d52.tar.gz'
+    assert validator.source_filename == 'R898/b90862f3baceaae3b7418c78f9d50d52.tar.gz'
     assert validator.tmp_dir == '/validation'
     assert validator.refid == 'b90862f3baceaae3b7418c78f9d50d52'
 
@@ -136,6 +135,7 @@ def test_extract_bag():
         "fixtures",
         "b90862f3baceaae3b7418c78f9d50d52.tar.gz")
     tmp_path = Path(validator.tmp_dir, validator.source_filename)
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
     copyfile(fixture_path, tmp_path)
 
     validator.extract_bag(tmp_path)
@@ -289,33 +289,17 @@ def test_move_to_destination():
 
     validator.move_to_destination(tmp_path)
     expected_paths = [
-        f"{validator.refid}/master/{validator.refid}_0001.tif",
-        f"{validator.refid}/master/{validator.refid}_0002.tif",
-        f"{validator.refid}/master_edited/{validator.refid}_0001.tif",
-        f"{validator.refid}/master_edited/{validator.refid}_0002.tif",
-        f"{validator.refid}/service_edited/{validator.refid}.pdf",
+        f"{validator.package_id}/master/{validator.refid}_0001.tif",
+        f"{validator.package_id}/master/{validator.refid}_0002.tif",
+        f"{validator.package_id}/master_edited/{validator.refid}_0001.tif",
+        f"{validator.package_id}/master_edited/{validator.refid}_0002.tif",
+        f"{validator.package_id}/service_edited/{validator.refid}.pdf",
     ]
     found = s3.list_objects_v2(
         Bucket=validator.destination_bucket,
-        Prefix=validator.refid)['Contents']
+        Prefix=validator.package_id)['Contents']
     assert len(expected_paths) == len(found)
     assert sorted(expected_paths) == sorted([i['Key'] for i in found])
-
-
-@mock_aws
-def test_move_to_destination_with_exception():
-    """Asserts correct exception is raised by validator."""
-    validator = Validator(*ARGS)
-    s3 = boto3.client('s3', region_name='us-east-1')
-    s3.create_bucket(Bucket=validator.destination_bucket)
-    s3.put_object(
-        Bucket=validator.destination_bucket,
-        Key=f'{validator.refid}/this-is-a-file.txt',
-        Body='')
-
-    tmp_path = Path(validator.tmp_dir, validator.refid)
-    with pytest.raises(AlreadyExistsError):
-        validator.move_to_destination(tmp_path)
 
 
 @mock_aws
@@ -363,7 +347,7 @@ def test_cleanup_binaries():
     assert not tmp_path.is_dir()
     found = s3.list_objects_v2(
         Bucket=validator.source_bucket,
-        Prefix=validator.refid)['KeyCount']
+        Prefix=validator.source_filename)['KeyCount']
     assert found == 1
     found = s3.list_objects_v2(
         Bucket=validator.destination_bucket,
@@ -396,6 +380,8 @@ def test_deliver_success_notification(mock_role):
     message_body = json.loads(messages[0].body)
     assert message_body['MessageAttributes']['outcome']['Value'] == 'SUCCESS'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
+    assert message_body['MessageAttributes']['package_id']['Value'] == validator.package_id
+    assert message_body['MessageAttributes']['source_filename']['Value'] == validator.source_filename
 
 
 @mock_aws
@@ -427,5 +413,7 @@ def test_deliver_failure_notification(mock_traceback, mock_role):
     message_body = json.loads(messages[0].body)
     assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
+    assert message_body['MessageAttributes']['package_id']['Value'] == validator.package_id
+    assert message_body['MessageAttributes']['source_filename']['Value'] == validator.source_filename
     assert exception_message in message_body['MessageAttributes']['message']['Value']
     assert message_body['MessageAttributes']['traceback']['Value'] == 'baz'
