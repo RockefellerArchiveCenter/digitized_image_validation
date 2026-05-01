@@ -69,18 +69,21 @@ def test_init():
 @patch('src.validate.Validator.validate_file_formats')
 @patch('src.validate.Validator.validate_ocr')
 @patch('src.validate.Validator.move_to_destination')
+@patch('src.validate.Validator.get_size_bytes')
 @patch('src.validate.Validator.cleanup_binaries')
 @patch('src.validate.Validator.deliver_success_notification')
-def test_run(mock_deliver, mock_cleanup, mock_move, mock_ocr, mock_validate_formats,
+def test_run(mock_deliver, mock_cleanup, mock_size, mock_move, mock_ocr, mock_validate_formats,
              mock_validate_assets, mock_validate_bag, mock_extract_bag, mock_download, mock_refid):
     """Asserts correct methods are called by run method."""
     validator = Validator(*ARGS)
     extracted_path = Path(validator.tmp_dir, validator.refid)
     download_path = "foo"
     mock_download.return_value = download_path
+    mock_size.return_value = 12345
     validator.run()
-    mock_deliver.assert_called_once_with()
+    mock_deliver.assert_called_once_with(12345)
     mock_cleanup.assert_called_once_with(extracted_path)
+    mock_size.assert_called_once_with(extracted_path)
     mock_move.assert_called_once_with(extracted_path)
     mock_ocr.assert_called_once_with(extracted_path)
     mock_validate_formats.assert_called_once_with(extracted_path)
@@ -302,6 +305,20 @@ def test_move_to_destination():
     assert sorted(expected_paths) == sorted([i['Key'] for i in found])
 
 
+def test_get_size_bytes():
+    validator = Validator(*ARGS)
+    fixture_path = Path(
+        "tests",
+        "fixtures",
+        "b90862f3baceaae3b7418c78f9d50d52")
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    output = validator.get_size_bytes(tmp_path)
+
+    assert output == 269231747
+
+
 @mock_aws
 def test_cleanup_binaries():
     """Asserts that binaries are cleaned up properly."""
@@ -372,8 +389,9 @@ def test_deliver_success_notification(mock_role):
     default_args = ARGS
     default_args[-1] = topic_arn
     validator = Validator(*default_args)
+    size = 12345
 
-    validator.deliver_success_notification()
+    validator.deliver_success_notification(size)
 
     queue = sqs_conn.get_queue_by_name(QueueName="test-queue")
     messages = queue.receive_messages(MaxNumberOfMessages=1)
@@ -382,6 +400,7 @@ def test_deliver_success_notification(mock_role):
     assert message_body['MessageAttributes']['refid']['Value'] == validator.refid
     assert message_body['MessageAttributes']['package_id']['Value'] == validator.package_id
     assert message_body['MessageAttributes']['source_filename']['Value'] == validator.source_filename
+    assert message_body['MessageAttributes']['size']['Value'] == str(size)
 
 
 @mock_aws

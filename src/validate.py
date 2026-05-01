@@ -79,8 +79,9 @@ class Validator(object):
             self.validate_file_formats(extracted)
             self.validate_ocr(extracted)
             self.move_to_destination(extracted)
+            size = self.get_size_bytes(extracted)
             self.cleanup_binaries(extracted)
-            self.deliver_success_notification()
+            self.deliver_success_notification(size)
             logging.info(
                 f'Package {self.refid} successfully validated.')
         except Exception as e:
@@ -268,6 +269,14 @@ class Validator(object):
         logging.debug(
             f'All files in payload directory of {bag_path} moved to destination bucket {self.destination_bucket}.')
 
+    def get_size_bytes(self, bag_path):
+        """"Fetches size of bag in bytes.
+
+        Args:
+            bag_path (pathlib.Path): path of bagit Bag containing assets.
+        """
+        return sum(f.stat().st_size for f in bag_path.rglob('*'))
+
     def cleanup_binaries(self, bag_path, job_failed=False):
         """Removes binaries after completion of successful or failed job.
 
@@ -288,7 +297,7 @@ class Validator(object):
                 Key=self.source_filename)
         logging.debug('Binaries cleaned up.')
 
-    def deliver_success_notification(self):
+    def deliver_success_notification(self, size):
         """Sends notifications after successful run."""
         client = self.get_client_with_role('sns', self.sns_role_arn)
         client.publish(
@@ -306,6 +315,10 @@ class Validator(object):
                 'source_filename': {
                     'DataType': 'String',
                     'StringValue': self.source_filename
+                },
+                'size': {
+                    'DataType': 'String',
+                    'StringValue': str(size)
                 },
                 'service': {
                     'DataType': 'String',
