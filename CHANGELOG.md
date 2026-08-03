@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.2](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.0.1...v1.0.2) (2026-08-03)
+
+
+### Bug Fixes
+
+* **deps:** Scheduled dependency updates ([eba724c](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/eba724c3d355c7c20bc645296b9f8ab32a649d7f))
+* **deps:** Scheduled dependency updates ([9bda5dc](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/9bda5dc0f486148075cc08da9565b383a72b1d5a))
+* **deps:** Scheduled dependency updates ([9bda5dc](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/9bda5dc0f486148075cc08da9565b383a72b1d5a))
+* **deps:** Scheduled dependency updates ([384cedf](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/384cedf875de5e10a83969468840f94716e0beca))
+* **deps:** Scheduled dependency updates from Development ([eba724c](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/eba724c3d355c7c20bc645296b9f8ab32a649d7f))
+
 ## [1.0.1](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.0.0...v1.0.1) (2026-07-06)
 
 
