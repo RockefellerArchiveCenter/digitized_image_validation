@@ -9,9 +9,9 @@ from uuid import uuid4
 
 import bagit
 import boto3
-import pymupdf
 from aws_assume_role_lib import assume_role
 from PIL import Image
+from pypdf import PdfReader
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
@@ -154,23 +154,28 @@ class Validator(object):
         Raises:
             FileNotFoundError if not all directories are present.
         """
-        for dir in ['master', 'master_edited', 'service_edited']:
+        for dir in ['master', 'service_edited']:
             if not (bag_path / 'data' / dir).is_dir():
                 raise FileNotFoundError(f"Expected directory {dir} is missing")
 
     def validate_file_counts(self, bag_path):
         """Asserts correct number of files is present in each directory."""
-        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf', filetype='pdf') as document:
-            pdf_page_count = document.page_count
+        reader = PdfReader(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
+        pdf_page_count = len(reader.pages)
         master_file_count = len(list((bag_path / 'data' / 'master').glob(f'{self.refid}*.tif')))
-        master_edited_file_count = len(
-            list((bag_path / 'data' / 'master_edited').glob(f'{self.refid}*.tif')))
-        if pdf_page_count != master_edited_file_count:
-            raise Exception(
-                f"PDF has {pdf_page_count} pages but found {master_edited_file_count} files in master_edited directory")
-        if master_file_count < master_edited_file_count:
-            raise Exception(
-                f"{master_edited_file_count} files found in master_edited directory but only {master_file_count} in master directory")
+        if (bag_path / 'data' / 'master_edited').is_dir():
+            master_edited_file_count = len(
+                list((bag_path / 'data' / 'master_edited').glob(f'{self.refid}*.tif')))
+            if pdf_page_count != master_edited_file_count:
+                raise Exception(
+                    f"PDF has {pdf_page_count} pages but found {master_edited_file_count} files in master_edited directory")
+            if master_file_count < master_edited_file_count:
+                raise Exception(
+                    f"{master_edited_file_count} files found in master_edited directory but only {master_file_count} in master directory")
+        else:
+            if pdf_page_count != master_file_count:
+                raise Exception(
+                    f"PDF has {pdf_page_count} pages but found {master_file_count} files in master_edited directory")
 
     def validate_file_names(self, bag_path):
         """Ensures file names are valid.
@@ -179,9 +184,10 @@ class Validator(object):
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
         for dir in ['master', 'master_edited', 'service_edited']:
-            for fp in (bag_path / 'data' / dir).iterdir():
-                if " " in fp.name:
-                    raise Exception(f"File name {str(fp)} contains space.")
+            if (bag_path / 'data' / dir).is_dir():
+                for fp in (bag_path / 'data' / dir).iterdir():
+                    if " " in fp.name:
+                        raise Exception(f"File name {str(fp)} contains space.")
 
     def validate_ocr(self, bag_path):
         """Ensures there is an OCR layer for each page of the PDF.
@@ -189,10 +195,10 @@ class Validator(object):
         Args:
             bag_path (pathlib.Path): path of bagit Bag containing assets.
         """
-        with pymupdf.open(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf', filetype='pdf') as document:
-            for page in document:
-                if page.get_text("text"):
-                    return True
+        reader = PdfReader(bag_path / 'data' / 'service_edited' / f'{self.refid}.pdf')
+        for page in reader.pages:
+            if page.extract_text():
+                return True
         raise OCRError(f'No OCR detected in package {self.refid}')
 
     def validate_assets(self, bag_path):

@@ -173,6 +173,28 @@ def test_validate_assets():
     validator.validate_assets(tmp_path)
 
 
+def test_validate_assets_internal_package():
+    """Asserts packages from internal digitization are validated as expected"""
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+    rmtree(tmp_path / 'data' / 'master_edited')
+
+    validator.validate_assets(tmp_path)
+
+
+def test_validate_directories_internal_packages():
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+
+    rmtree(tmp_path / 'data' / 'master_edited')
+
+    validator.validate_directories(tmp_path)
+
+
 def test_validate_directories_missing_dir():
     validator = Validator(*ARGS)
     fixture_path = Path("tests", "fixtures", validator.refid)
@@ -231,6 +253,17 @@ def test_validate_file_formats():
     fixture_path = Path("tests", "fixtures", validator.refid)
     tmp_path = Path(validator.tmp_dir, validator.refid)
     copytree(fixture_path, tmp_path)
+
+    validator.validate_file_formats(tmp_path)
+
+
+def test_validate_file_formats_internal_package():
+    """Asserts file formats from internal digitization packages are validated as expected."""
+    validator = Validator(*ARGS)
+    fixture_path = Path("tests", "fixtures", validator.refid)
+    tmp_path = Path(validator.tmp_dir, validator.refid)
+    copytree(fixture_path, tmp_path)
+    rmtree(tmp_path / 'data' / 'master_edited')
 
     validator.validate_file_formats(tmp_path)
 
