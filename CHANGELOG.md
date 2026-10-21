@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.1](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.1.0...v1.1.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* update pip ([f394c51](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/f394c519cad598551a997cae8d4b41096d717e54))
+* update pip ([f394c51](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/f394c519cad598551a997cae8d4b41096d717e54))
+* update pip ([5126122](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/512612226c7ceffe24fd9b76b1b715e738860be0))
+* update pip ([5126122](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/512612226c7ceffe24fd9b76b1b715e738860be0))
+* update pip ([cfa1a5a](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/cfa1a5a18deae460cceb631e649ca99776efb5d5))
+
 ## [1.1.0](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.0.3...v1.1.0) (2026-10-05)
 
 
