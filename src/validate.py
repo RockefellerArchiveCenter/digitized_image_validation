@@ -4,7 +4,6 @@ import re
 import tarfile
 import traceback
 from pathlib import Path
-from shutil import rmtree
 from uuid import uuid4
 
 import bagit
@@ -80,13 +79,12 @@ class Validator(object):
             self.validate_ocr(extracted)
             self.move_to_destination(extracted)
             size = self.get_size_bytes(extracted)
-            self.cleanup_binaries(extracted)
             self.deliver_success_notification(size)
             logging.info(
                 f'Package {self.refid} successfully validated.')
         except Exception as e:
             logging.exception(e)
-            self.cleanup_binaries(extracted, job_failed=True)
+            self.cleanup_source_binaries()
             self.deliver_failure_notification(e)
 
     def get_client_with_role(self, resource, role_arn):
@@ -283,24 +281,12 @@ class Validator(object):
         """
         return sum(f.stat().st_size for f in bag_path.rglob('*'))
 
-    def cleanup_binaries(self, bag_path, job_failed=False):
-        """Removes binaries after completion of successful or failed job.
-
-        Args:
-            bag_path (pathlib.Path): path of bagit Bag containing assets.
-        """
+    def cleanup_source_binaries(self):
+        """Removes source binaries after completion of successful job."""
         client = self.get_client_with_role('s3', self.s3_role_arn)
-        if bag_path.is_dir():
-            try:
-                rmtree(bag_path)
-            except OSError:
-                for p in bag_path.iterdir():
-                    p.chmod(0o775)
-                rmtree(bag_path)
-        if not job_failed:
-            client.delete_object(
-                Bucket=self.source_bucket,
-                Key=self.source_filename)
+        client.delete_object(
+            Bucket=self.source_bucket,
+            Key=self.source_filename)
         logging.debug('Binaries cleaned up.')
 
     def deliver_success_notification(self, size):
