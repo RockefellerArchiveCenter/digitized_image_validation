@@ -70,7 +70,7 @@ def test_init():
 @patch('src.validate.Validator.validate_ocr')
 @patch('src.validate.Validator.move_to_destination')
 @patch('src.validate.Validator.get_size_bytes')
-@patch('src.validate.Validator.cleanup_binaries')
+@patch('src.validate.Validator.cleanup_source_binaries')
 @patch('src.validate.Validator.deliver_success_notification')
 def test_run(mock_deliver, mock_cleanup, mock_size, mock_move, mock_ocr, mock_validate_formats,
              mock_validate_assets, mock_validate_bag, mock_extract_bag, mock_download, mock_refid):
@@ -82,7 +82,7 @@ def test_run(mock_deliver, mock_cleanup, mock_size, mock_move, mock_ocr, mock_va
     mock_size.return_value = 12345
     validator.run()
     mock_deliver.assert_called_once_with(12345)
-    mock_cleanup.assert_called_once_with(extracted_path)
+    mock_cleanup.assert_not_called()
     mock_size.assert_called_once_with(extracted_path)
     mock_move.assert_called_once_with(extracted_path)
     mock_ocr.assert_called_once_with(extracted_path)
@@ -95,7 +95,7 @@ def test_run(mock_deliver, mock_cleanup, mock_size, mock_move, mock_ocr, mock_va
 
 
 @patch('src.validate.Validator.validate_refid')
-@patch('src.validate.Validator.cleanup_binaries')
+@patch('src.validate.Validator.cleanup_source_binaries')
 @patch('src.validate.Validator.deliver_failure_notification')
 def test_run_with_exception(mock_deliver, mock_cleanup, mock_refid):
     """Asserts run method handles exceptions correctly."""
@@ -103,7 +103,7 @@ def test_run_with_exception(mock_deliver, mock_cleanup, mock_refid):
     exception = Exception("Invalid refid.")
     mock_refid.side_effect = exception
     validator.run()
-    mock_cleanup.assert_called_once()
+    mock_cleanup.assert_called_once_with()
     mock_deliver.assert_called_once_with(exception)
 
 
@@ -353,19 +353,12 @@ def test_get_size_bytes():
 
 
 @mock_aws
-def test_cleanup_binaries():
+def test_cleanup_source_binaries():
     """Asserts that binaries are cleaned up properly."""
     validator = Validator(*ARGS)
-    fixture_path = Path(
-        "tests",
-        "fixtures",
-        "b90862f3baceaae3b7418c78f9d50d52")
-    tmp_path = Path(validator.tmp_dir, validator.refid)
     s3 = boto3.client('s3', region_name='us-east-1')
     s3.create_bucket(Bucket=validator.source_bucket)
     s3.create_bucket(Bucket=validator.destination_bucket)
-
-    copytree(fixture_path, tmp_path)
     s3.put_object(
         Bucket=validator.source_bucket,
         Key=validator.source_filename,
@@ -376,29 +369,11 @@ def test_cleanup_binaries():
         Body=''
     )
 
-    validator.cleanup_binaries(tmp_path)
-    assert not tmp_path.is_dir()
+    validator.cleanup_source_binaries()
     found = s3.list_objects_v2(
         Bucket=validator.source_bucket,
         Prefix=validator.refid)['KeyCount']
     assert found == 0
-    found = s3.list_objects_v2(
-        Bucket=validator.destination_bucket,
-        Prefix=validator.refid)['KeyCount']
-    assert found == 1
-
-    copytree(fixture_path, tmp_path)
-    s3.put_object(
-        Bucket=validator.source_bucket,
-        Key=validator.source_filename,
-        Body='')
-
-    validator.cleanup_binaries(tmp_path, job_failed=True)
-    assert not tmp_path.is_dir()
-    found = s3.list_objects_v2(
-        Bucket=validator.source_bucket,
-        Prefix=validator.source_filename)['KeyCount']
-    assert found == 1
     found = s3.list_objects_v2(
         Bucket=validator.destination_bucket,
         Prefix=validator.refid)['KeyCount']
