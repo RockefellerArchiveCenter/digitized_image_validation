@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.1.2...v1.1.3) (2026-11-06)
+
+
+### Bug Fixes
+
+* remove unnecessary code ([d444f24](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/d444f247583c38df164427d2fc59cb7b9dc660ff))
+* remove unnecessary temp file removal ([8b59514](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/8b59514db95b93b91ed6897b707608d305b2a3b6))
+
 ## [1.1.2](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.1.1...v1.1.2) (2026-11-02)
 
 
