@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.4](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.1.3...v1.1.4) (2026-11-19)
+
+
+### Bug Fixes
+
+* update deploy ([71dcfb6](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/71dcfb6702627653fd031aebc911c69928f7ee7f))
+* update deploy ([a91ce83](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/a91ce83f1d57e3c87302e53057641893d8ecbe1e))
+* update deploy ([431e61c](https://github.com/RockefellerArchiveCenter/digitized_image_validation/commit/431e61c5d951d979d68b0269cc64a3ac81954968))
+
 ## [1.1.3](https://github.com/RockefellerArchiveCenter/digitized_image_validation/compare/v1.1.2...v1.1.3) (2026-11-06)
 
 
